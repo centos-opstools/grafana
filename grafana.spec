@@ -5,55 +5,76 @@
 %global repo            grafana
 # https://github.com/grafana/grafana
 %global import_path     %{provider}.%{provider_tld}/%{project}/%{repo}
-%global commit          v2.0.2
+%global commit          v2.6.0
 %global shortcommit     %(c=%{commit}; echo ${c:0:7})
 
 Name:           grafana
-Version:        2.0.2
-Release:        3%{?dist}
+Version:        2.6.0
+Release:        2%{?dist}
 Summary:        Grafana is an open source, feature rich metrics dashboard and graph editor
 License:        ASL 2.0
 URL:            https://%{import_path}
 Source0:        https://%{import_path}/archive/%{commit}/%{repo}-%{shortcommit}.tar.gz
+Source1:        grafana-2.6.0-app.js
 ExclusiveArch:  %{ix86} x86_64 %{arm}
 
 BuildRequires:  golang >= 1.2.1-3
+BuildRequires:  golang(github.com/BurntSushi/toml)
 BuildRequires:  golang(github.com/Unknwon/com)
+BuildRequires:  golang(github.com/aws/aws-sdk-go/aws)
+BuildRequires:  golang(github.com/bmizerany/assert)
+BuildRequires:  golang(github.com/bradfitz/gomemcache)
+BuildRequires:  golang(github.com/codegangsta/cli)
+BuildRequires:  golang(github.com/davecgh/go-spew/spew)
+BuildRequires:  golang(github.com/fatih/color)
+BuildRequires:  golang(github.com/franela/goreq)
+BuildRequires:  golang(github.com/go-ini/ini)
+BuildRequires:  golang(github.com/go-ldap/ldap)
 BuildRequires:  golang(github.com/Unknwon/macaron)
-BuildRequires:  golang(github.com/Unknwon/macaron/inject)
-BuildRequires:  golang(github.com/bradfitz/gomemcache/memcache)
-BuildRequires:  golang(github.com/couchbase/go-couchbase)
-BuildRequires:  golang(github.com/go-sql-driver/mysql)
-BuildRequires:  golang(github.com/go-xorm/core)
-BuildRequires:  golang(github.com/go-xorm/xorm)
-BuildRequires:  golang(github.com/jtolds/gls)
-BuildRequires:  golang(github.com/lib/pq)
-BuildRequires:  golang(github.com/lib/pq/oid)
-BuildRequires:  golang(github.com/lunny/nodb)
-BuildRequires:  golang(github.com/lunny/nodb/config)
 BuildRequires:  golang(github.com/macaron-contrib/binding)
 BuildRequires:  golang(github.com/macaron-contrib/session)
 BuildRequires:  golang(github.com/macaron-contrib/session/mysql)
 BuildRequires:  golang(github.com/macaron-contrib/session/postgres)
 BuildRequires:  golang(github.com/macaron-contrib/session/redis)
+BuildRequires:  golang(github.com/go-sql-driver/mysql)
+BuildRequires:  golang(github.com/go-xorm/core)
+BuildRequires:  golang(github.com/go-xorm/xorm)
+BuildRequires:  golang(github.com/gorilla/websocket)
+BuildRequires:  golang(github.com/gosimple/slug)
+BuildRequires:  golang(github.com/hashicorp/go-version)
+BuildRequires:  golang(github.com/jmespath/go-jmespath)
+BuildRequires:  golang(github.com/jtolds/gls)
+BuildRequires:  golang(github.com/klauspost/compress)
+BuildRequires:  golang(github.com/klauspost/cpuid)
+BuildRequires:  golang(github.com/klauspost/crc32)
+BuildRequires:  golang(github.com/kr/pretty)
+BuildRequires:  golang(github.com/kr/text)
+BuildRequires:  golang(github.com/lib/pq)
+BuildRequires:  golang(github.com/lib/pq/oid)
+BuildRequires:  golang(github.com/mattn/go-colorable)
+BuildRequires:  golang(github.com/mattn/go-isatty)
 BuildRequires:  golang(github.com/mattn/go-sqlite3)
-BuildRequires:  golang(github.com/mattn/go-sqlite3/sqlite3_test)
-BuildRequires:  golang(github.com/siddontang/ledisdb/config)
-BuildRequires:  golang(github.com/siddontang/ledisdb/ledis)
+BuildRequires:  golang(github.com/rainycape/unidecode)
 BuildRequires:  golang(github.com/smartystreets/goconvey/convey)
 BuildRequires:  golang(github.com/streadway/amqp)
 BuildRequires:  golang(golang.org/x/net/context)
 BuildRequires:  golang(golang.org/x/oauth2)
-BuildRequires:  golang(google.golang.org/appengine/urlfetch)
-BuildRequires:  golang(google.golang.org/appengine)
-BuildRequires:  golang(google.golang.org/cloud/compute/metadata)
 BuildRequires:  golang(gopkg.in/bufio.v1)
-BuildRequires:  golang(gopkg.in/check.v1)
-BuildRequires:  golang(gopkg.in/ini.v1)
 BuildRequires:  golang(gopkg.in/redis.v2)
-BuildRequires:  golang(github.com/gosimple/slug)
+# requires nodejs-less <= 1.7.5 for build
 BuildRequires:  nodejs-less
 BuildRequires: systemd
+
+# more node deps:
+#BuildRequires: nodejs-grunt-cli
+#BuildRequires: nodejs-grunt-angular-templates
+#BuildRequires: nodejs-grunt-contrib-requirejs
+BuildRequires: nodejs-typescript
+#BuildRequires: nodejs-grunt-contrib-cssmin
+#BuildRequires: nodejs-grunt-contrib-clean
+#BuildRequires: nodejs-grunt-contrib-concat
+
+
 
 Requires(post): systemd
 Requires(preun): systemd
@@ -69,6 +90,14 @@ Graphite, InfluxDB & OpenTSDB.
 %prep
 %setup -q -n %{repo}-%{version}
 rm -rf Godeps
+rm -f package.json
+
+sed -i "s/'jshint/#'jshint/" tasks/build_task.js
+sed -i "s/'jscs/#'jscs/" tasks/build_task.js
+sed -i "s/'tslint/#'tslint/" tasks/build_task.js
+sed -i "s/'karma:/#'karma/" tasks/build_task.js
+sed -i "s/'phantom:/#'phantom/" tasks/build_task.js
+sed -i "s/'usemin:/#'usemin/" tasks/build_task.js
 
 %build
 mkdir -p ./_build/src/github.com/grafana
@@ -77,12 +106,34 @@ export GOPATH=$(pwd)/_build:%{gopath}
 go build -o ./bin/grafana-server main.go
 go build -o ./bin/build build.go
 
+# required for grafana-3.0.0
+# go run build.go build
+
+#grunt --base=/usr/lib/node_modules
+#grunt build
+
+
 # Generate CSS
-lessc --include-path=./public/vendor/bootstrap/less:./public/css/less ./public/css/less/bootstrap.dark.less ./public/css/bootstrap.dark.min.css
-lessc --include-path=./public/vendor/bootstrap/less:./public/css/less ./public/css/less/bootstrap.light.less ./public/css/bootstrap.light.min.css
-lessc --include-path=./public/vendor/bootstrap/less:./public/css/less ./public/css/less/grafana-responsive.less ./public/css/bootstrap-responsive.min.css
+lessc --include-path=./public/vendor/bootstrap/less:./public/less ./public/less/bootstrap.dark.less ./public/css/bootstrap.dark.min.css
+lessc --include-path=./public/vendor/bootstrap/less:./public/less ./public/less/bootstrap.light.less ./public/css/bootstrap.light.min.css
+lessc --include-path=./public/vendor/bootstrap/less:./public/less ./public/less/grafana-responsive.less ./public/css/bootstrap-responsive.min.css
 cat public/vendor/css/normalize.min.css public/vendor/css/timepicker.css public/vendor/css/spectrum.css public/css/bootstrap.dark.min.css public/css/bootstrap-responsive.min.css public/vendor/css/font-awesome.min.css >> public/css/grafana.dark.min.css
 cat public/vendor/css/normalize.min.css public/vendor/css/timepicker.css public/vendor/css/spectrum.css public/css/bootstrap.light.min.css public/css/bootstrap-responsive.min.css public/vendor/css/font-awesome.min.css >> public/css/grafana.light.min.css
+#
+
+#
+#cat public/vendor/requirejs/require.js public/app/require_config.js > public/app/app.js
+
+# compile typescript
+find . -name *.ts -exec tsc -m amd -t ES5 --outDir public_gen/ --sourceMap -d --sourceRoot 'public/' --rootDir 'public/' --experimentalDecorators '{}' \;
+## copy compiled files back
+
+pushd public
+cp -r ../public_gen/app .
+cp -r ../public_gen/test .
+popd
+# place app.js
+cp %{SOURCE1} public/app/app.js
 
 %install
 # install -d -p %{buildroot}/%{gopath}/src/%{import_path}/
@@ -105,8 +156,8 @@ mkdir -p %{buildroot}%{_sysconfdir}/sysconfig
 install -p -m 0644 packaging/rpm/sysconfig/grafana-server %{buildroot}%{_sysconfdir}/sysconfig
 install -d -p %{buildroot}%{_sharedstatedir}/%{name}
 install -d -p %{buildroot}/var/log/%{name}
-rm -f %{buildroot}%{_datadir}/%{name}/vendor/phantomjs/phantomjs
-ln -s /usr/bin/phantomjs %{buildroot}%{_datadir}/%{name}/vendor/phantomjs/phantomjs
+#rm -f %{buildroot}%{_datadir}/%{name}/vendor/phantomjs/phantomjs
+#ln -s /usr/bin/phantomjs %{buildroot}%{_datadir}/%{name}/vendor/phantomjs/phantomjs
 
 %check
 mkdir -p ./_build/src/github.com/grafana
@@ -124,6 +175,8 @@ go test ./pkg/services/sqlstore/migrations
 go test ./pkg/setting
 go test ./pkg/util
 
+%{!?_licensedir:%global license %doc}
+
 %files
 %defattr(-, grafana, grafana, -)
 %{_datadir}/%{name}
@@ -131,7 +184,7 @@ go test ./pkg/util
 %exclude %{_datadir}/%{name}/docs
 %doc %{_datadir}/%{name}/CHANGELOG.md
 %doc %{_datadir}/%{name}/CONTRIBUTING.md
-%doc %{_datadir}/%{name}/LICENSE.md
+%license %{_datadir}/%{name}/LICENSE.md
 %doc %{_datadir}/%{name}/NOTICE.md
 %doc %{_datadir}/%{name}/README.md
 %doc %{_datadir}/%{name}/docs
@@ -159,6 +212,12 @@ exit 0
 %systemd_postun grafana.service
 
 %changelog
+* Mon May 09 2016 Matthias Runge <mrunge@redhat.com> - 2.6.0-2
+- fix app/app.js
+
+* Tue May 03 2016 Matthias Runge <mrunge@redhat.com> - 2.6.0-1
+- update to 2.6.0
+
 * Fri Jul 31 2015 Graeme Gillies <ggillies@redhat.com> - 2.0.2-3
 - Unbundled phantomjs from grafana
 
