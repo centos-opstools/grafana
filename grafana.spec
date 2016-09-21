@@ -5,12 +5,12 @@
 %global repo            grafana
 # https://github.com/grafana/grafana
 %global import_path     %{provider}.%{provider_tld}/%{project}/%{repo}
-%global commit          v2.6.0
+%global commit          v3.1.1
 %global shortcommit     %(c=%{commit}; echo ${c:0:7})
 
 Name:           grafana
-Version:        2.6.0
-Release:        2%{?dist}
+Version:        3.1.1
+Release:        1%{?dist}
 Summary:        Grafana is an open source, feature rich metrics dashboard and graph editor
 License:        ASL 2.0
 URL:            https://%{import_path}
@@ -18,30 +18,36 @@ Source0:        https://%{import_path}/archive/%{commit}/%{repo}-%{shortcommit}.
 Source1:        grafana-2.6.0-app.js
 ExclusiveArch:  %{ix86} x86_64 %{arm}
 
-BuildRequires:  golang >= 1.2.1-3
+BuildRequires:  golang >= 1.6.1
 BuildRequires:  golang(github.com/BurntSushi/toml)
 BuildRequires:  golang(github.com/Unknwon/com)
 BuildRequires:  golang(github.com/aws/aws-sdk-go/aws)
 BuildRequires:  golang(github.com/bmizerany/assert)
-BuildRequires:  golang(github.com/bradfitz/gomemcache)
+BuildRequires:  golang(github.com/bradfitz/gomemcache/memcache)
 BuildRequires:  golang(github.com/codegangsta/cli)
 BuildRequires:  golang(github.com/davecgh/go-spew/spew)
 BuildRequires:  golang(github.com/fatih/color)
 BuildRequires:  golang(github.com/franela/goreq)
 BuildRequires:  golang(github.com/go-ini/ini)
 BuildRequires:  golang(github.com/go-ldap/ldap)
-BuildRequires:  golang(github.com/Unknwon/macaron)
-BuildRequires:  golang(github.com/macaron-contrib/binding)
-BuildRequires:  golang(github.com/macaron-contrib/session)
-BuildRequires:  golang(github.com/macaron-contrib/session/mysql)
-BuildRequires:  golang(github.com/macaron-contrib/session/postgres)
-BuildRequires:  golang(github.com/macaron-contrib/session/redis)
+BuildRequires:  golang(github.com/go-macaron/macaron)
+BuildRequires:  golang(github.com/go-macaron/binding)
+BuildRequires:  golang(github.com/go-macaron/gzip)
+BuildRequires:  golang(github.com/go-macaron/inject)
+BuildRequires:  golang(github.com/go-macaron/session)
+BuildRequires:  golang(github.com/go-macaron/session/memcache)
+BuildRequires:  golang(github.com/go-macaron/session/mysql)
+BuildRequires:  golang(github.com/go-macaron/session/postgres)
+BuildRequires:  golang(github.com/go-macaron/session/redis)
 BuildRequires:  golang(github.com/go-sql-driver/mysql)
+BuildRequires:  golang(github.com/go-stack/stack)
 BuildRequires:  golang(github.com/go-xorm/core)
 BuildRequires:  golang(github.com/go-xorm/xorm)
 BuildRequires:  golang(github.com/gorilla/websocket)
 BuildRequires:  golang(github.com/gosimple/slug)
 BuildRequires:  golang(github.com/hashicorp/go-version)
+BuildRequires:  golang(github.com/inconshreveable/log15)
+BuildRequires:  golang(github.com/inconshreveable/log15/term)
 BuildRequires:  golang(github.com/jmespath/go-jmespath)
 BuildRequires:  golang(github.com/jtolds/gls)
 BuildRequires:  golang(github.com/klauspost/compress)
@@ -59,29 +65,39 @@ BuildRequires:  golang(github.com/smartystreets/goconvey/convey)
 BuildRequires:  golang(github.com/streadway/amqp)
 BuildRequires:  golang(golang.org/x/net/context)
 BuildRequires:  golang(golang.org/x/oauth2)
+BuildRequires:  golang(golang.org/x/sys/unix)
 BuildRequires:  golang(gopkg.in/bufio.v1)
+BuildRequires:  golang(gopkg.in/ini.v1)
+BuildRequires:  golang(gopkg.in/macaron.v1)
 BuildRequires:  golang(gopkg.in/redis.v2)
 # requires nodejs-less <= 1.7.5 for build
 BuildRequires:  nodejs-less
-BuildRequires: systemd
+BuildRequires:  nodejs-grunt-angular-templates
+BuildRequires:  nodejs-load-grunt-tasks
+BuildRequires:  nodejs-sinon
+BuildRequires:  nodejs-grunt-cli
+BuildRequires:  nodejs-grunt-contrib-clean
+BuildRequires:  nodejs-grunt-contrib-compress
+BuildRequires:  nodejs-grunt-contrib-concat
+BuildRequires:  nodejs-grunt-contrib-cssmin
+BuildRequires:  nodejs-grunt-contrib-htmlmin
+BuildRequires:  nodejs-grunt-contrib-uglify
+BuildRequires:  nodejs-grunt-contrib-watch
+
+BuildRequires:  nodejs-typescript
+BuildRequires:  mocha
+BuildRequires:  systemd
 
 # more node deps:
-#BuildRequires: nodejs-grunt-cli
-#BuildRequires: nodejs-grunt-angular-templates
-#BuildRequires: nodejs-grunt-contrib-requirejs
-BuildRequires: nodejs-typescript
-#BuildRequires: nodejs-grunt-contrib-cssmin
-#BuildRequires: nodejs-grunt-contrib-clean
-#BuildRequires: nodejs-grunt-contrib-concat
 
 
 
-Requires(post): systemd
-Requires(preun): systemd
+Requires(post):   systemd
+Requires(preun):  systemd
 Requires(postun): systemd
 
-Requires:       golang >= 1.2.1-3
-Requires:       phantomjs
+Requires:         golang >= 1.5
+Requires:         phantomjs
 
 %description
 Grafana is an open source, feature rich metrics dashboard and graph editor for
@@ -90,26 +106,29 @@ Graphite, InfluxDB & OpenTSDB.
 %prep
 %setup -q -n %{repo}-%{version}
 rm -rf Godeps
-rm -f package.json
+# package json has still required metadata
 
 sed -i "s/'jshint/#'jshint/" tasks/build_task.js
-sed -i "s/'jscs/#'jscs/" tasks/build_task.js
+#sed -i "s/'jscs/#'jscs/" tasks/build_task.js
 sed -i "s/'tslint/#'tslint/" tasks/build_task.js
-sed -i "s/'karma:/#'karma/" tasks/build_task.js
+#sed -i "s/'karma:/#'karma/" tasks/build_task.js
 sed -i "s/'phantom:/#'phantom/" tasks/build_task.js
-sed -i "s/'usemin:/#'usemin/" tasks/build_task.js
+#sed -i "s/'usemin:/#'usemin/" tasks/build_task.js
+
 
 %build
 mkdir -p ./_build/src/github.com/grafana
 ln -s $(pwd) ./_build/src/github.com/grafana/grafana
 export GOPATH=$(pwd)/_build:%{gopath}
-go build -o ./bin/grafana-server main.go
-go build -o ./bin/build build.go
 
 # required for grafana-3.0.0
-# go run build.go build
+go run build.go build
 
-#grunt --base=/usr/lib/node_modules
+pushd _build/src/github.com/grafana/grafana
+
+ln -s /usr/lib/node_modules/
+grunt build
+#grunt --base=/usr/lib/node_modules build
 #grunt build
 
 
